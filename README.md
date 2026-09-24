@@ -28,6 +28,12 @@ From [Open VSX Registry](https://open-vsx.org/extension/dprslt/vsx-git-diff-from
 
 ## Stacked diffs
 
+If the checked-out branch has an open GitHub PR, its PR base is selected when
+the extension opens or the branch changes. This also works when `gh stack` has
+no local stack metadata. The view title shows the current branch and base.
+You can still choose a different base manually until you reopen the extension
+or switch branches. Automatic selection requires an authenticated `gh` CLI.
+
 When the current branch belongs to a stack, the base branch picker lists the
 branches below it (marked 🥞) before the recent branches, so you can diff
 against the layer you are actually stacked on.

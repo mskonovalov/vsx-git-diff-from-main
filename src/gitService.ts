@@ -120,8 +120,8 @@ export class GitService {
    * Falls back to the local branch name if no remote ref exists.
    */
   private async getRemoteRef(branch: string): Promise<string> {
-    // If already a remote ref, use as-is
-    if (branch.includes('/')) {
+    // If already an origin ref, use as-is; local branch names can also contain '/'.
+    if (branch.startsWith('origin/')) {
       return branch;
     }
     try {
