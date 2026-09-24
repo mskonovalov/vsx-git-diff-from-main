@@ -30,7 +30,7 @@ function describeStackParent(parent: StackParent): string {
 /**
  * Extension activation
  */
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
   // Initialize logger
   Logger.initialize('Git Diff Sidebar');
   Logger.log('Extension activating...');
@@ -66,6 +66,11 @@ export function activate(context: vscode.ExtensionContext) {
   // Create the tree data provider
   Logger.log('Creating tree data provider...');
   const gitDiffProvider = new GitDiffProvider(context);
+  const initialBranch = await gitService.getCurrentBranch();
+  const initialBase = await stackService.getCurrentPullRequestBase(initialBranch);
+  if (initialBase) {
+    await gitDiffProvider.setBaseBranch(initialBase);
+  }
 
   // Register refresh command
   const refreshCommand = vscode.commands.registerCommand('gitDiff.refresh', () => {
@@ -80,6 +85,7 @@ export function activate(context: vscode.ExtensionContext) {
     treeDataProvider: gitDiffProvider,
     showCollapseAll: true
   });
+  treeView.description = `${initialBranch} → ${gitDiffProvider.getBaseBranch()}`;
 
   context.subscriptions.push(treeView);
   Logger.log('Tree view registered successfully');
@@ -237,6 +243,7 @@ export function activate(context: vscode.ExtensionContext) {
               : selected.label;
             if (branchName !== currentBaseBranch) {
               await gitDiffProvider.setBaseBranch(branchName);
+              treeView.description = `${branchSelection.name} → ${branchName}`;
               vscode.window.showInformationMessage(`Base branch changed to: ${branchName}`);
             }
           }
@@ -258,6 +265,25 @@ export function activate(context: vscode.ExtensionContext) {
   );
   context.subscriptions.push(selectBaseBranchCommand);
 
+  const branchSelection = { name: initialBranch };
+  const syncCurrentBranch = async () => {
+    const branch = await gitService.getCurrentBranch();
+    if (branch === branchSelection.name) return;
+
+    branchSelection.name = branch;
+    const base = await stackService.getCurrentPullRequestBase(branch);
+    if (branch !== branchSelection.name) return;
+
+    if (base && base !== gitDiffProvider.getBaseBranch()) {
+      await gitDiffProvider.setBaseBranch(base);
+    } else {
+      gitDiffProvider.refresh();
+    }
+    treeView.description = `${branch} → ${gitDiffProvider.getBaseBranch()}`;
+  };
+  const branchCheck = setInterval(() => { void syncCurrentBranch(); }, 5000);
+  context.subscriptions.push({ dispose: () => clearInterval(branchCheck) });
+
   // Debounced refresh to prevent infinite loops from file watcher cascades
   let refreshTimeout: ReturnType<typeof setTimeout> | undefined;
   const REFRESH_DEBOUNCE_MS = 300;
@@ -267,6 +293,7 @@ export function activate(context: vscode.ExtensionContext) {
       clearTimeout(refreshTimeout);
     }
     refreshTimeout = setTimeout(() => {
+      void syncCurrentBranch();
       gitDiffProvider.refresh();
     }, REFRESH_DEBOUNCE_MS);
   };

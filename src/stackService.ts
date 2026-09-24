@@ -1,4 +1,4 @@
-import { exec } from 'child_process';
+import { exec, execFile } from 'child_process';
 import { promisify } from 'util';
 import * as os from 'os';
 import * as vscode from 'vscode';
@@ -12,6 +12,7 @@ import {
 import { Logger } from './logger';
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 
 /** Give up on a stacking CLI rather than hanging the branch picker */
 const CLI_TIMEOUT_MS = 10000;
@@ -76,6 +77,29 @@ export class StackService {
     const chain = stack.parents.map(p => p.name).join(' <- ') || '(no parents)';
     Logger.log(`[StackService] Using ${stack.kind} stack: ${chain}`);
     return stack;
+  }
+
+  /** The PR base is authoritative even when this worktree has no local stack metadata. */
+  async getCurrentPullRequestBase(currentBranch: string): Promise<string | null> {
+    const ghPath = this.getExecutable('ghExecutable', 'gh');
+    try {
+      const { stdout } = await execFileAsync(
+        ghPath,
+        ['pr', 'view', '--json', 'baseRefName,headRefName,state'],
+        { cwd: this.workspaceRoot, timeout: CLI_TIMEOUT_MS }
+      );
+      const pr = JSON.parse(stdout) as {
+        baseRefName?: string;
+        headRefName?: string;
+        state?: string;
+      };
+      return pr.state === 'OPEN' && pr.headRefName === currentBranch
+        ? pr.baseRefName ?? null
+        : null;
+    } catch (error: unknown) {
+      this.logCliFailure('gh pr view', ghPath, error);
+      return null;
+    }
   }
 
   /**
