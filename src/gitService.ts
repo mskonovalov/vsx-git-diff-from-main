@@ -115,27 +115,34 @@ export class GitService {
     }
   }
 
-  /**
-   * Resolve a branch name to its remote tracking ref (e.g. origin/main).
-   * Falls back to the local branch name if no remote ref exists.
-   */
+  /** Resolve a branch to the most recent known parent of HEAD. */
   private async getRemoteRef(branch: string): Promise<string> {
-    // If already an origin ref, use as-is; local branch names can also contain '/'.
     if (branch.startsWith('origin/')) {
       return branch;
     }
+    const remoteRef = `origin/${branch}`;
     try {
-      const { stdout } = await execAsync(`git rev-parse --verify origin/${branch}`, {
+      await execAsync(`git rev-parse --verify ${remoteRef}`, {
         cwd: this.workspaceRoot
       });
-      if (stdout.trim()) {
-        Logger.log(`[GitService] Using remote ref origin/${branch}`);
-        return `origin/${branch}`;
-      }
     } catch {
       Logger.log(`[GitService] No remote ref for ${branch}, using local`);
+      return branch;
     }
-    return branch;
+
+    try {
+      await execAsync(`git merge-base --is-ancestor ${remoteRef} ${branch}`, {
+        cwd: this.workspaceRoot
+      });
+      await execAsync(`git merge-base --is-ancestor ${branch} HEAD`, {
+        cwd: this.workspaceRoot
+      });
+      Logger.log(`[GitService] Using locally advanced parent ${branch}`);
+      return branch;
+    } catch {
+      Logger.log(`[GitService] Using remote ref ${remoteRef}`);
+      return remoteRef;
+    }
   }
 
   /**

@@ -33,6 +33,9 @@ the extension opens or the branch changes. This also works when `gh stack` has
 no local stack metadata. The view title shows the current branch and base.
 You can still choose a different base manually until you reopen the extension
 or switch branches. Automatic selection requires an authenticated `gh` CLI.
+If the local parent branch has advanced and those commits are already in the
+checked-out branch, the comparison uses that parent even if its remote-tracking
+ref has not been fetched yet.
 
 When the current branch belongs to a stack, the base branch picker lists the
 branches below it (marked 🥞) before the recent branches, so you can diff
